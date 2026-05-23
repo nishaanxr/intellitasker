@@ -1211,10 +1211,15 @@ function App() {
                 <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
                   <h4 className="text-sm font-semibold text-red-400">Danger Zone</h4>
                   <p className="text-xs text-red-400/70 mt-1 mb-4">Permanently delete your account and all associated data. This action cannot be undone.</p>
-                  <button onClick={() => {
+                  <button onClick={async () => {
                      if (window.confirm("Are you sure you want to permanently delete your account? This action cannot be undone.")) {
-                        showToast("Account scheduled for deletion.", "success");
-                        setTimeout(handleLogout, 2000);
+                        try {
+                           await axios.delete(`${API_URL}/users/${currentUser.id}`);
+                           showToast("Account deleted successfully.", "success");
+                           setTimeout(handleLogout, 1500);
+                        } catch (error) {
+                           alert("Error deleting account: " + (error.response?.data?.error || error.message));
+                        }
                      }
                   }} className="px-4 py-2 bg-red-500/10 text-red-500 text-sm font-medium border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors">Delete Account</button>
                 </div>

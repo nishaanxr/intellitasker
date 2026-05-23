@@ -645,6 +645,34 @@ app.delete('/api/tasks/:id', async (req, res) => {
 });
 
 
+// Delete User / Workspace
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.role === 'admin') {
+      // If deleting an admin, cascade delete all team members and tasks in their workspace
+      await User.deleteMany({ workspaceId: user._id });
+      await Task.deleteMany({ workspaceId: user._id });
+    } else {
+      // If deleting a member, delete the user and reassign their tasks back to the workspace admin
+      await User.findByIdAndDelete(req.params.id);
+      await Task.updateMany(
+        { assignedTo: req.params.id },
+        { $set: { assignedTo: user.workspaceId } }
+      );
+    }
+
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Health Check
 app.get('/', (req, res) => {
   res.json({ message: '✅ TaskSync API is running successfully!' });
