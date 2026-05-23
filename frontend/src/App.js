@@ -132,6 +132,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("user");
     setCurrentUser(null);
+    setActiveTab("dashboard");
   };
 
   const handleSetup2FA = async () => {
@@ -550,7 +551,7 @@ function App() {
 
   const renderKanbanColumn = (title, status, taskList, colorClass) => (
     <div 
-      className="flex flex-col flex-1 min-w-0 h-full bg-[#0e0e10] rounded-xl border border-[#27272a] overflow-hidden"
+      className="flex flex-col flex-1 min-w-0 md:min-w-[300px] h-auto md:h-[620px] bg-[#0e0e10] rounded-xl border border-[#27272a] overflow-hidden shadow-md"
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, status)}
     >
@@ -878,9 +879,9 @@ function App() {
 
           {/* DASHBOARD VIEW */}
           {activeTab === 'dashboard' && (
-            <div className="flex flex-col h-[calc(100vh-140px)] gap-6">
+            <div className="flex flex-col min-h-full gap-6 pb-12">
               {/* Stats Row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 flex-shrink-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 flex-shrink-0">
                 <StatCard
                   title="Total Tasks"
                   value={totalTasks}
@@ -1065,7 +1066,7 @@ function App() {
 
               {viewMode === 'board' ? (
                 /* Kanban Board Container */
-                <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 pb-4 items-stretch relative min-h-0">
+                <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 pb-4 items-stretch relative min-h-0 md:overflow-x-auto md:pb-6">
                    {loading ? (
                       <div className="absolute inset-0 flex items-center justify-center">
                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#eeeeee]"></div>
