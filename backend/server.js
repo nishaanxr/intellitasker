@@ -159,6 +159,40 @@ async function sendTaskEmail(userEmail, userName, taskTitle, taskDescription) {
 }
 
 
+async function sendWelcomeEmail(userEmail, userName, tempPassword) {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: userEmail,
+    subject: 'Welcome to IntelliTasker! 🚀 Your Account Has Been Created',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h2 style="color: #1e3a8a; margin-bottom: 20px;">Welcome to IntelliTasker, ${userName}!</h2>
+        <p style="font-size: 16px; line-height: 1.5; color: #374151;">
+          Your workspace administrator has created a new account for you. You can now log in using the temporary credentials below:
+        </p>
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <p style="margin: 5px 0; font-size: 15px;"><strong>Email:</strong> ${userEmail}</p>
+          <p style="margin: 5px 0; font-size: 15px;"><strong>Temporary Password:</strong> <code style="background-color: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 16px;">${tempPassword}</code></p>
+        </div>
+        <p style="font-size: 15px; color: #4b5563;">
+          For your security, we highly recommend changing your password from your Settings panel as soon as you log in.
+        </p>
+        <p style="font-size: 14px; color: #9ca3af; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+          This is an automated email from the IntelliTasker Workspace Server.
+        </p>
+      </div>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log('✅ Welcome email sent successfully to:', userEmail);
+  } catch (error) {
+    console.error('❌ Welcome email sending failed:', error);
+  }
+}
+
+
 // ================= ROUTES =================
 
 // Login
@@ -296,14 +330,21 @@ app.post('/api/create-test-user', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   try {
     const { name, email, password, role, workspaceId } = req.body;
+    
+    // Auto-generate temporary password if none is provided
+    const userPassword = password || Math.random().toString(36).slice(-8);
+
     const user = new User({
       name,
       email: email.toLowerCase(),
-      password,
+      password: userPassword,
       role: role || 'member',
       workspaceId
     });
     await user.save();
+
+    // Send welcome email with the temporary password
+    await sendWelcomeEmail(user.email, user.name, userPassword);
 
     res.status(201).json(user);
 
