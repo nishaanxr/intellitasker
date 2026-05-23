@@ -4,7 +4,7 @@ import Login from "./Login";
 import AIChatbot from "./AIChatbot";
 import CalmMode from "./CalmMode";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://intellitasker.onrender.com/api";
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
