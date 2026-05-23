@@ -130,6 +130,7 @@ const CalmMode = ({ tasks, onExit, onTaskStatusChange }) => {
         return () => {
             stopAudio();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPlayingMusic, audioTrack]);
 
     // Generate particles
@@ -305,11 +306,16 @@ const CalmMode = ({ tasks, onExit, onTaskStatusChange }) => {
                                 </div>
                             </div>
 
-                            <div className="inline-flex items-center justify-center space-x-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 mt-4 mb-4 backdrop-blur-sm shadow-xl">
-                                <span className="w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)] animate-pulse"></span>
-                                <span className="text-[10px] font-semibold text-purple-200/90 uppercase tracking-widest">
-                                    Active Task {currentIndex + 1} of {activeTasks.length}
-                                </span>
+                            <div className="flex flex-col items-center gap-3">
+                                <div className="inline-flex items-center justify-center space-x-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 mt-4 backdrop-blur-sm shadow-xl">
+                                    <span className="w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)] animate-pulse"></span>
+                                    <span className="text-[10px] font-semibold text-purple-200/90 uppercase tracking-widest">
+                                        Active Task {currentIndex + 1} of {activeTasks.length}
+                                    </span>
+                                </div>
+                                <p className="text-slate-400 text-sm italic font-light max-w-md animate-pulse">
+                                    "{message}"
+                                </p>
                             </div>
                         </div>
 
