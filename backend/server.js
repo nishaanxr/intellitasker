@@ -275,6 +275,30 @@ app.put('/api/users/:id', async (req, res) => {
 });
 
 
+// Update User Password
+app.put('/api/users/:id/update-password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.password !== currentPassword) {
+      return res.status(400).json({ message: 'Incorrect current password' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+
 // ================= CREATE TASK (FIXED COMPLETELY) =================
 // Create Task
 // Create Task
