@@ -168,6 +168,31 @@ app.post('/api/login/2fa', async (req, res) => {
   }
 });
 
+
+// Register User (New Workspace Admins)
+app.post('/api/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ error: 'A user with this email already exists' });
+    }
+
+    const user = new User({
+      name,
+      email: email.toLowerCase(),
+      password,
+      role: 'admin' // Registered users are workspace admins by default!
+    });
+
+    await user.save();
+    res.status(201).json({ id: user._id, name: user.name, role: user.role, email: user.email });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Setup 2FA
 app.post('/api/users/:id/2fa/setup', async (req, res) => {
   try {

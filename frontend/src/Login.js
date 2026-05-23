@@ -4,6 +4,8 @@ import axios from "axios";
 const API_URL = "https://intellitasker.onrender.com/api";
 
 function Login({ onLogin }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,23 +28,35 @@ function Login({ onLogin }) {
     setError("");
 
     try {
-      const res = await axios.post(`${API_URL}/login`, {
-        email,
-        password,
-      });
+      if (isSignUp) {
+        // Registration Flow
+        const res = await axios.post(`${API_URL}/register`, {
+          name,
+          email: email.trim().toLowerCase(),
+          password,
+        });
+        localStorage.setItem("user", JSON.stringify(res.data));
+        onLogin(res.data);
+      } else {
+        // Standard Login Flow
+        const res = await axios.post(`${API_URL}/login`, {
+          email: email.trim().toLowerCase(),
+          password,
+        });
 
-      if (res.data.requires2FA) {
-        setRequires2FA(true);
-        setTempUserId(res.data.userId);
-        setLoading(false);
-        return;
+        if (res.data.requires2FA) {
+          setRequires2FA(true);
+          setTempUserId(res.data.userId);
+          setLoading(false);
+          return;
+        }
+
+        localStorage.setItem("user", JSON.stringify(res.data));
+        onLogin(res.data);
       }
-
-      localStorage.setItem("user", JSON.stringify(res.data));
-      onLogin(res.data);
     } catch (err) {
-      console.error("Login error:", err);
-      setError(err.response?.data?.error || "Invalid credentials");
+      console.error("Authentication error:", err);
+      setError(err.response?.data?.error || err.response?.data?.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
@@ -93,8 +107,12 @@ function Login({ onLogin }) {
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                </svg>
            </div>
-           <h1 className="text-xl font-medium tracking-tight text-[#eeeeee]">Log in to IntelliTasker</h1>
-           <p className="text-sm text-[#8a8f98] mt-2">Enter your email and password to continue</p>
+           <h1 className="text-xl font-medium tracking-tight text-[#eeeeee]">
+              {isSignUp ? "Create your Account" : "Log in to IntelliTasker"}
+           </h1>
+           <p className="text-sm text-[#8a8f98] mt-2">
+              {isSignUp ? "Register as workspace admin to manage tasks" : "Enter your email and password to continue"}
+           </p>
         </div>
 
         {!requires2FA ? (
@@ -102,6 +120,19 @@ function Login({ onLogin }) {
            {error && (
              <div className="p-3 bg-red-500/10 text-red-400 text-sm rounded-lg text-center border border-red-500/20">
                {error}
+             </div>
+           )}
+
+           {isSignUp && (
+             <div>
+               <input
+                 type="text"
+                 value={name}
+                 onChange={(e) => setName(e.target.value)}
+                 className="w-full bg-[#151516] border border-[#27272a] rounded-lg px-4 py-2.5 text-sm text-[#eeeeee] focus:outline-none focus:border-[#3f3f46] transition-colors placeholder:text-[#8a8f98]"
+                 placeholder="Your full name"
+                 required
+               />
              </div>
            )}
 
@@ -132,7 +163,7 @@ function Login({ onLogin }) {
              disabled={loading}
              className="w-full bg-white text-black font-medium py-2.5 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 text-sm mt-2"
            >
-             Continue
+             {isSignUp ? (loading ? "Creating..." : "Create Account") : "Continue"}
            </button>
         </form>
         ) : (
@@ -167,9 +198,15 @@ function Login({ onLogin }) {
         </form>
         )}
 
-        <div className="mt-8 flex justify-between text-xs text-[#8a8f98]">
-           <button onClick={() => setShowForgotModal(true)} className="hover:text-white transition-colors">Forgot password?</button>
-           <button onClick={() => alert("Please ask an admin to create an account for you.")} className="hover:text-white transition-colors">Contact admin</button>
+        <div className="mt-8 flex justify-between items-center text-xs text-[#8a8f98]">
+           {isSignUp ? (
+             <button onClick={() => { setIsSignUp(false); setError(""); }} className="hover:text-white transition-colors">Already have an account? Log in</button>
+           ) : (
+             <>
+               <button onClick={() => setShowForgotModal(true)} className="hover:text-white transition-colors">Forgot password?</button>
+               <button onClick={() => { setIsSignUp(true); setError(""); }} className="text-white hover:underline transition-colors font-medium">Create an account</button>
+             </>
+           )}
         </div>
       </div>
 
