@@ -104,7 +104,8 @@ function App() {
       const res = await axios.get(`${API_URL}/tasks`, {
         params: {
           userId: currentUser.id,
-          role: currentUser.role
+          role: currentUser.role,
+          workspaceId: currentUser.workspaceId || currentUser.id
         }
       });
       setTasks(res.data);
@@ -117,7 +118,11 @@ function App() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`${API_URL}/users`);
+      const res = await axios.get(`${API_URL}/users`, {
+        params: {
+          workspaceId: currentUser.workspaceId || currentUser.id
+        }
+      });
       setUsers(res.data);
     } catch (err) {
       console.error(err);
@@ -182,9 +187,9 @@ function App() {
     e.preventDefault();
     try {
       if (editingTask) {
-        await axios.put(`${API_URL}/tasks/${editingTask._id}`, taskForm);
+        await axios.put(`${API_URL}/tasks/${editingTask._id}`, { ...taskForm, workspaceId: currentUser.workspaceId || currentUser.id });
       } else {
-        await axios.post(`${API_URL}/tasks`, taskForm);
+        await axios.post(`${API_URL}/tasks`, { ...taskForm, workspaceId: currentUser.workspaceId || currentUser.id });
       }
       setIsTaskModalOpen(false);
       fetchTasks();
@@ -314,7 +319,7 @@ function App() {
   const handleUserSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_URL}/users`, userForm);
+      await axios.post(`${API_URL}/users`, { ...userForm, workspaceId: currentUser.workspaceId || currentUser.id });
       setIsUserModalOpen(false);
       setUserForm({ name: '', email: '', role: 'member' });
       fetchUsers();

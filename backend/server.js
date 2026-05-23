@@ -30,7 +30,41 @@ console.log("MongoDB URI:", process.env.MONGODB_URI ? "Loaded ✅" : "Missing �
 mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 15000,
 })
-.then(() => console.log('✅ MongoDB Connected Successfully'))
+.then(async () => {
+  console.log('✅ MongoDB Connected Successfully');
+  
+  try {
+    // Migrate legacy users to have workspaceId
+    const oldUsers = await User.find({ workspaceId: { $exists: false } });
+    if (oldUsers.length > 0) {
+      console.log(`Migrating ${oldUsers.length} legacy users...`);
+      for (let u of oldUsers) {
+        if (u.role === 'admin') {
+          u.workspaceId = u._id;
+        } else {
+          const firstAdmin = await User.findOne({ role: 'admin' });
+          u.workspaceId = firstAdmin ? firstAdmin._id : u._id;
+        }
+        await u.save();
+      }
+      console.log("User workspace migration completed successfully.");
+    }
+
+    // Migrate legacy tasks to have workspaceId
+    const oldTasks = await Task.find({ workspaceId: { $exists: false } });
+    if (oldTasks.length > 0) {
+      console.log(`Migrating ${oldTasks.length} legacy tasks...`);
+      const firstAdmin = await User.findOne({ role: 'admin' });
+      for (let t of oldTasks) {
+        t.workspaceId = firstAdmin ? firstAdmin._id : null;
+        await t.save();
+      }
+      console.log("Task workspace migration completed successfully.");
+    }
+  } catch (err) {
+    console.error("Workspace migration failed:", err);
+  }
+})
 .catch(err => console.error('❌ MongoDB Connection Error:', err.message));
 
 
@@ -41,7 +75,8 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['admin', 'member'], default: 'member' },
   twoFactorSecret: String,
-  twoFactorEnabled: { type: Boolean, default: false }
+  twoFactorEnabled: { type: Boolean, default: false },
+  workspaceId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 });
 
 const User = mongoose.model('User', userSchema);
@@ -53,6 +88,7 @@ const taskSchema = new mongoose.Schema({
   description: { type: String, required: true },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, enum: ['pending', 'in-progress', 'completed'], default: 'pending' },
+  workspaceId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 
@@ -134,7 +170,7 @@ app.post('/api/login', async (req, res) => {
       if (user.twoFactorEnabled) {
         return res.json({ requires2FA: true, userId: user._id });
       }
-      res.json({ id: user._id, name: user.name, role: user.role, email: user.email });
+      res.json({ id: user._id, name: user.name, role: user.role, email: user.email, workspaceId: user.workspaceId });
     } else {
       res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -159,7 +195,7 @@ app.post('/api/login/2fa', async (req, res) => {
     console.log(`2FA Attempt for ${user.email} - Provided: ${token}, Expected: ${expectedToken}, Verified: ${verified}`);
 
     if (verified) {
-      res.json({ id: user._id, name: user.name, role: user.role, email: user.email });
+      res.json({ id: user._id, name: user.name, role: user.role, email: user.email, workspaceId: user.workspaceId });
     } else {
       res.status(401).json({ error: "Invalid 2FA code" });
     }
@@ -185,9 +221,10 @@ app.post('/api/register', async (req, res) => {
       password,
       role: 'admin' // Registered users are workspace admins by default!
     });
+    user.workspaceId = user._id; // Set their own workspace ID
 
     await user.save();
-    res.status(201).json({ id: user._id, name: user.name, role: user.role, email: user.email });
+    res.status(201).json({ id: user._id, name: user.name, role: user.role, email: user.email, workspaceId: user.workspaceId });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -258,7 +295,14 @@ app.post('/api/create-test-user', async (req, res) => {
 // Create User
 app.post('/api/users', async (req, res) => {
   try {
-    const user = new User(req.body);
+    const { name, email, password, role, workspaceId } = req.body;
+    const user = new User({
+      name,
+      email: email.toLowerCase(),
+      password,
+      role: role || 'member',
+      workspaceId
+    });
     await user.save();
 
     res.status(201).json(user);
@@ -272,7 +316,12 @@ app.post('/api/users', async (req, res) => {
 // Get All Users
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await User.find();
+    const { workspaceId } = req.query;
+    let filter = {};
+    if (workspaceId) {
+      filter = { $or: [ { workspaceId }, { _id: workspaceId } ] };
+    }
+    const users = await User.find(filter);
     res.json(users);
 
   } catch (error) {
@@ -329,7 +378,7 @@ app.put('/api/users/:id/update-password', async (req, res) => {
 // Create Task
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { title, description, assignedTo, status } = req.body;
+    const { title, description, assignedTo, status, workspaceId } = req.body;
 
     if (!title || !description || !assignedTo) {
       return res.status(400).json({ error: "Missing required fields" });
@@ -351,6 +400,7 @@ app.post("/api/tasks", async (req, res) => {
       description,
       assignedTo,
       status: status || "pending",
+      workspaceId,
       history: [
         {
           message: `Task created and assigned to ${user.name}`,
@@ -377,7 +427,12 @@ app.post("/api/tasks", async (req, res) => {
 // ================= GET ALL TASKS =================
 app.get("/api/tasks", async (req, res) => {
   try {
-    const tasks = await Task.find().populate("assignedTo").populate("comments.user").sort({ createdAt: -1 });
+    const { workspaceId } = req.query;
+    let filter = {};
+    if (workspaceId) {
+      filter = { workspaceId };
+    }
+    const tasks = await Task.find(filter).populate("assignedTo").populate("comments.user").sort({ createdAt: -1 });
     res.json(tasks);
   } catch (error) {
     console.error("❌ Error fetching tasks:", error);
