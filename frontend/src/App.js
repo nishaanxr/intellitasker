@@ -340,6 +340,7 @@ function App() {
     }, 3000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCommentsOpen, selectedTaskForComments?._id, currentUser]);
 
   // J.A.R.V.I.S. AI Update Generator
