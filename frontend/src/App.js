@@ -210,20 +210,40 @@ function App() {
   };
 
   const handleStatusChange = async (task, newStatus) => {
+    // 1. Optimistic status update (Immediate visual movement)
+    setTasks(prev => prev.map(t => t._id === task._id ? { ...t, status: newStatus } : t));
+
     try {
-      await axios.put(`${API_URL}/tasks/${task._id}`, { status: newStatus });
-      fetchTasks();
+      // 2. Perform backend update quietly in the background
+      const res = await axios.put(`${API_URL}/tasks/${task._id}`, { status: newStatus });
+      
+      // 3. Sync state with actual response
+      setTasks(prev => prev.map(t => t._id === task._id ? res.data : t));
     } catch (error) {
       console.error("Error updating status", error);
+      // Rollback if backend fails
+      fetchTasks();
     }
   };
 
   const handleUpdateProgress = async (task, newHealthStatus, newBlockerText) => {
+    // 1. Optimistic state update (Immediate frontend change)
+    setTasks(prev => prev.map(t => t._id === task._id ? { 
+      ...t, 
+      healthStatus: newHealthStatus, 
+      blockerText: newBlockerText 
+    } : t));
+
     try {
-      await axios.put(`${API_URL}/tasks/${task._id}`, { healthStatus: newHealthStatus, blockerText: newBlockerText });
-      fetchTasks();
+      // 2. Perform backend update quietly in the background
+      const res = await axios.put(`${API_URL}/tasks/${task._id}`, { healthStatus: newHealthStatus, blockerText: newBlockerText });
+      
+      // 3. Update the state with the actual populated database response
+      setTasks(prev => prev.map(t => t._id === task._id ? res.data : t));
     } catch (error) {
       console.error("Error updating task metadata", error);
+      // Rollback to original if API fails
+      fetchTasks();
     }
   };
 
@@ -289,6 +309,69 @@ function App() {
   const openComments = (task) => {
     setSelectedTaskForComments(task);
     setIsCommentsOpen(true);
+  };
+
+  // Live Comments and History Sync Polling (every 3 seconds)
+  useEffect(() => {
+    if (!isCommentsOpen || !selectedTaskForComments) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API_URL}/tasks`, {
+          params: {
+            userId: currentUser.id,
+            role: currentUser.role,
+            workspaceId: currentUser.workspaceId || currentUser.id
+          }
+        });
+        const latestTasks = res.data;
+        setTasks(latestTasks);
+        
+        const updatedSelected = latestTasks.find(t => t._id === selectedTaskForComments._id);
+        if (updatedSelected && (
+          JSON.stringify(updatedSelected.comments) !== JSON.stringify(selectedTaskForComments.comments) ||
+          JSON.stringify(updatedSelected.history) !== JSON.stringify(selectedTaskForComments.history)
+        )) {
+          setSelectedTaskForComments(updatedSelected);
+        }
+      } catch (err) {
+        console.error("Error polling live updates:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isCommentsOpen, selectedTaskForComments?._id, currentUser]);
+
+  // J.A.R.V.I.S. AI Update Generator
+  const handleAIDraftUpdate = async (type) => {
+    setCommentText("J.A.R.V.I.S. is drafting your update...");
+    try {
+      let prompt = "";
+      if (type === 'blocked') {
+        prompt = `Write a extremely short, professional update for a task comment. The task is "${selectedTaskForComments.title}" (${selectedTaskForComments.description || ''}). I am currently BLOCKED or need help from the manager. Draft a message for me explaining this politely in 1-2 short sentences. Do not use quotes, introductory phrases, or placeholders.`;
+      } else {
+        prompt = `Write a extremely short, professional progress update for a task comment. The task is "${selectedTaskForComments.title}" (${selectedTaskForComments.description || ''}) and we are making progress. Draft a polite 1-2 sentence update for the team. Do not use quotes, introductory phrases, or placeholders.`;
+      }
+
+      const response = await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: prompt,
+          userId: currentUser.id,
+          name: currentUser.name
+        })
+      });
+      const data = await response.json();
+      if (data.reply) {
+        setCommentText(data.reply);
+      } else {
+        setCommentText("Unable to generate draft.");
+      }
+    } catch (err) {
+      console.error(err);
+      setCommentText("Error generating draft.");
+    }
   };
 
   const handleAddComment = async (e) => {
@@ -530,8 +613,21 @@ function App() {
            <div className="w-5 h-5 rounded-full bg-[#27272a] flex items-center justify-center text-[10px] font-medium text-[#eeeeee]" title={task.assignedTo?.name || 'Unassigned'}>
              {task.assignedTo?.name ? task.assignedTo.name.charAt(0).toUpperCase() : '?'}
            </div>
+           {(() => {
+             const deadlineDate = task.deadline 
+               ? new Date(task.deadline) 
+               : new Date(new Date(task.createdAt || Date.now()).getTime() + 3 * 24 * 60 * 60 * 1000);
+             
+             return (
+               <span className="flex items-center gap-1 text-[10px] bg-[#1d1d1f] text-[#8a8f98] px-2 py-0.5 rounded-md border border-[#27272a]" title={`Due date & time: ${deadlineDate.toLocaleString()}`}>
+                 <svg className="w-3 h-3 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                 <span className="text-purple-300 font-medium">Due:</span>
+                 <span>{deadlineDate.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+               </span>
+             );
+           })()}
            {task.comments?.length > 0 && (
-             <span className="flex items-center gap-1 text-[#8a8f98]">
+             <span className="flex items-center gap-1 text-[#8a8f98] bg-[#1d1d1f] px-2 py-0.5 rounded-md border border-[#27272a] text-[10px]">
                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                {task.comments.length}
              </span>
@@ -1098,7 +1194,17 @@ function App() {
                          <div key={task._id} onClick={() => openComments(task)} className="grid grid-cols-12 gap-4 p-3 hover:bg-[#27272a]/50 rounded-lg cursor-pointer items-center text-sm border-b border-[#27272a]/50 last:border-0 group transition-colors">
                             <div className="col-span-6 md:col-span-5 font-medium text-[#eeeeee] flex flex-col">
                                <span>{task.title}</span>
-                               {task.deadline && <span className="text-[10px] text-[#8a8f98] mt-0.5">Due: {new Date(task.deadline).toLocaleDateString()}</span>}
+                               {(() => {
+                                 const deadlineDate = task.deadline 
+                                   ? new Date(task.deadline) 
+                                   : new Date(new Date(task.createdAt || Date.now()).getTime() + 3 * 24 * 60 * 60 * 1000);
+                                 
+                                 return (
+                                   <span className="text-[10px] text-[#8a8f98] mt-0.5">
+                                     Due: {deadlineDate.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                   </span>
+                                 );
+                               })()}
                             </div>
                             <div className="col-span-3 md:col-span-2">
                                <select
@@ -1249,11 +1355,11 @@ function App() {
                     <tbody className="divide-y divide-[#27272a] text-sm">
                       {tasks.map(task => {
                         let progressText = '-';
-                        if (task.subtasks && task.subtasks.length > 0) {
+                        if (task.status === 'completed') {
+                          progressText = '100%';
+                        } else if (task.subtasks && task.subtasks.length > 0) {
                           const completed = task.subtasks.filter(s => s.completed).length;
                           progressText = `${Math.round((completed / task.subtasks.length) * 100)}%`;
-                        } else if (task.status === 'completed') {
-                          progressText = '100%';
                         } else if (task.status === 'in-progress') {
                           progressText = task.healthStatus === 'on-track' ? 'On Track' : task.healthStatus === 'at-risk' ? 'At Risk' : 'Blocked';
                         }
@@ -1388,34 +1494,72 @@ function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {selectedTaskForComments.comments && selectedTaskForComments.comments.length > 0 ? (
-                selectedTaskForComments.comments.map((comment, idx) => (
-                  <div key={idx} className={`flex gap-3 ${comment.user?._id === currentUser.id ? 'justify-end' : ''}`}>
-                    {comment.user?._id !== currentUser.id && (
-                      <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                        {comment.user?.name ? comment.user.name.charAt(0).toUpperCase() : '?'}
+              {(() => {
+                const combined = [
+                  ...(selectedTaskForComments.comments || []).map(c => ({ ...c, type: 'comment' })),
+                  ...(selectedTaskForComments.history || []).map(h => ({ ...h, type: 'history' }))
+                ].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+                return combined.length > 0 ? (
+                  combined.map((item, idx) => {
+                    if (item.type === 'history') {
+                      return (
+                        <div key={`h-${idx}`} className="flex justify-center my-2 animate-[fade-in_0.2s_ease-out]">
+                          <span className="bg-[#1e293b]/70 text-slate-400 border border-slate-700/40 text-[10px] px-3 py-1 rounded-full text-center tracking-wide font-medium shadow-sm">
+                            ⚙️ {item.message}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={`c-${idx}`} className={`flex gap-3 animate-[fade-in_0.2s_ease-out] ${item.user?._id === currentUser.id ? 'justify-end' : ''}`}>
+                        {item.user?._id !== currentUser.id && (
+                          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                            {item.user?.name ? item.user.name.charAt(0).toUpperCase() : '?'}
+                          </div>
+                        )}
+                        <div className={`max-w-[80%] rounded-xl p-3 text-sm ${item.user?._id === currentUser.id ? 'bg-blue-600/20 text-blue-100 border border-blue-600/30 rounded-tr-none' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none'}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`font-semibold text-xs ${item.user?._id === currentUser.id ? 'text-blue-400' : 'text-slate-400'}`}>
+                              {item.user?._id === currentUser.id ? 'You' : item.user?.name}
+                            </span>
+                            <span className="text-[10px] text-slate-500">{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <p>{item.text}</p>
+                        </div>
                       </div>
-                    )}
-                    <div className={`max-w-[80%] rounded-xl p-3 text-sm ${comment.user?._id === currentUser.id ? 'bg-blue-600/20 text-blue-100 border border-blue-600/30 rounded-tr-none' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none'}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-semibold text-xs ${comment.user?._id === currentUser.id ? 'text-blue-400' : 'text-slate-400'}`}>
-                          {comment.user?._id === currentUser.id ? 'You' : comment.user?.name}
-                        </span>
-                        <span className="text-[10px] text-slate-500">{new Date(comment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <p>{comment.text}</p>
-                    </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-2">
+                    <svg className="w-12 h-12 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                    <p>No activity or comments yet. Start the conversation!</p>
                   </div>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-2">
-                  <svg className="w-12 h-12 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-                  <p>No comments yet. Start the conversation!</p>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
-            <div className="p-4 bg-slate-800/30 border-t border-slate-700/50">
+            <div className="p-4 bg-slate-800/30 border-t border-slate-700/50 space-y-3">
+              <div className="flex items-center justify-between text-xs px-1">
+                <span className="text-slate-400 font-medium flex items-center gap-1">✨ J.A.R.V.I.S. Drafter:</span>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleAIDraftUpdate('progress')} 
+                    type="button"
+                    className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded text-[10px] transition-all cursor-pointer font-semibold"
+                  >
+                    Draft Progress Update
+                  </button>
+                  <button 
+                    onClick={() => handleAIDraftUpdate('blocked')} 
+                    type="button"
+                    className="px-2 py-0.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded text-[10px] transition-all cursor-pointer font-semibold"
+                  >
+                    Draft Blocker Alert
+                  </button>
+                </div>
+              </div>
               <form onSubmit={handleAddComment} className="flex gap-2">
                 <input
                   type="text"
@@ -1426,7 +1570,7 @@ function App() {
                 />
                 <button
                   type="submit"
-                  disabled={!commentText.trim()}
+                  disabled={!commentText.trim() || commentText.startsWith("J.A.R.V.I.S. is drafting")}
                   className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:shadow-none"
                 >
                   <svg className="w-5 h-5 block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
