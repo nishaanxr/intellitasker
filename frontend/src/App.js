@@ -6,6 +6,19 @@ import CalmMode from "./CalmMode";
 
 const API_URL = "https://intellitasker.onrender.com/api";
 
+const formatAttachmentUrl = (url) => {
+  if (!url) return "#";
+  // If the url contains localhost:5000, we translate it to the current API_URL server root
+  if (url.startsWith("http://localhost:5000")) {
+    return url.replace("http://localhost:5000/api", API_URL);
+  }
+  // If it's already a relative path, prepend API_URL
+  if (url.startsWith("/")) {
+    return `${API_URL}${url}`;
+  }
+  return url;
+};
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -599,7 +612,7 @@ function App() {
             <div className="flex flex-col gap-1 mt-1">
               <span className="text-[10px] text-[#8a8f98] font-medium">Uploaded Files</span>
               {task.attachments.map((file, i) => (
-                <a key={i} href={`${API_URL}${file.url}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] text-blue-400 hover:text-blue-300 hover:underline bg-blue-500/10 px-2 py-1 rounded w-max border border-blue-500/20" onClick={(e) => e.stopPropagation()}>
+                <a key={i} href={formatAttachmentUrl(file.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] text-blue-400 hover:text-blue-300 hover:underline bg-blue-500/10 px-2 py-1 rounded w-max border border-blue-500/20" onClick={(e) => e.stopPropagation()}>
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                   {file.originalName}
                 </a>
