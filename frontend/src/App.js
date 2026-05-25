@@ -500,12 +500,18 @@ function App() {
       draggable
       onDragStart={(e) => onDragStart(e, task._id)}
       onClick={() => openComments(task)}
-      className={`group bg-[#151516] p-4 rounded-xl border ${task.blockerText && task.status !== 'completed' ? 'border-red-500/50 hover:border-red-500' : 'border-[#27272a] hover:border-[#3f3f46]'} shadow-sm transition-all cursor-grab active:cursor-grabbing mb-3`}
+      className={`group bg-[#151516] p-4 rounded-xl border ${
+        task.status === 'completed' ? 'border-[#27272a] hover:border-[#3f3f46]' :
+        task.healthStatus === 'blocked' ? 'border-red-500/50 hover:border-red-500' :
+        task.healthStatus === 'at-risk' ? 'border-amber-500/50 hover:border-amber-500' :
+        'border-[#27272a] hover:border-[#3f3f46]'
+      } shadow-sm transition-all cursor-grab active:cursor-grabbing mb-3`}
     >
       <div className="flex justify-between items-start mb-2">
         <h4 className="text-[#eeeeee] font-medium text-sm leading-tight group-hover:text-white transition-colors flex items-center gap-2">
           {task.title}
-          {task.blockerText && task.status !== 'completed' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Blocked"></span>}
+          {task.status !== 'completed' && task.healthStatus === 'blocked' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Blocked"></span>}
+          {task.status !== 'completed' && task.healthStatus === 'at-risk' && <span className="w-2 h-2 rounded-full bg-amber-500" title="At Risk"></span>}
         </h4>
         <div className="flex gap-1 shrink-0 ml-2">
           {task.priority === 'high' && <span className="text-[10px] flex items-center gap-1 text-red-400"><div className="w-2 h-2 rounded-full bg-red-400"></div> High</span>}
