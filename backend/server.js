@@ -575,6 +575,35 @@ app.post('/api/tasks/:id/upload', upload.single('file'), async (req, res) => {
 });
 
 
+// ================= DELETE TASK FILE =================
+app.delete('/api/tasks/:taskId/attachments/:attachmentId', async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.taskId);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    const attachment = task.attachments.id(req.params.attachmentId);
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+
+    // Delete the file physically from disk
+    const filePath = path.join(__dirname, 'uploads', attachment.filename);
+    fs.unlink(filePath, (err) => {
+      if (err) console.error("Error deleting physical file:", err);
+    });
+
+    // Remove the subdocument attachment
+    task.attachments.pull(req.params.attachmentId);
+    task.history.push({ message: `File deleted: ${attachment.originalName}`, timestamp: new Date() });
+    
+    await task.save();
+    
+    const updatedTask = await Task.findById(task._id).populate("assignedTo").populate("comments.user");
+    res.json(updatedTask);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // ================= AI TASK BREAKDOWN =================
 app.post('/api/tasks/:id/ai-breakdown', async (req, res) => {
   try {

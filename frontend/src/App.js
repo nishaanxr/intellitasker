@@ -302,6 +302,36 @@ function App() {
     }
   };
 
+  const handleDeleteAttachment = async (taskId, attachmentId) => {
+    if (!window.confirm("Are you sure you want to delete this uploaded file?")) return;
+    try {
+      // Optimistically update tasks array locally
+      setTasks(prevTasks => prevTasks.map(t => {
+        if (t._id === taskId) {
+          return {
+            ...t,
+            attachments: t.attachments.filter(att => att._id !== attachmentId)
+          };
+        }
+        return t;
+      }));
+
+      // Send DELETE request to backend
+      const res = await axios.delete(`${API_URL}/tasks/${taskId}/attachments/${attachmentId}`);
+      
+      // Update selected task in modal if open
+      if (selectedTaskForComments && selectedTaskForComments._id === taskId) {
+        setSelectedTaskForComments(res.data);
+      }
+      
+      // Synchronize full state
+      setTasks(prevTasks => prevTasks.map(t => t._id === taskId ? res.data : t));
+    } catch (error) {
+      alert("Error deleting file: " + error.message);
+      fetchTasks();
+    }
+  };
+
   const onDragStart = (e, taskId) => {
     e.dataTransfer.setData("taskId", taskId);
   };
@@ -618,10 +648,21 @@ function App() {
             <div className="flex flex-col gap-1 mt-1">
               <span className="text-[10px] text-[#8a8f98] font-medium">Uploaded Files</span>
               {task.attachments.map((file, i) => (
-                <a key={i} href={formatAttachmentUrl(file.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] text-blue-400 hover:text-blue-300 hover:underline bg-blue-500/10 px-2 py-1 rounded w-max border border-blue-500/20" onClick={(e) => e.stopPropagation()}>
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-                  {file.originalName}
-                </a>
+                <div key={i} className="flex items-center gap-1.5 w-max group/file">
+                  <a href={formatAttachmentUrl(file.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] text-blue-400 hover:text-blue-300 hover:underline bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20" onClick={(e) => e.stopPropagation()}>
+                    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                    <span className="truncate max-w-[120px]">{file.originalName}</span>
+                  </a>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDeleteAttachment(task._id, file._id); }} 
+                    className="p-1 rounded bg-transparent hover:bg-red-500/10 text-[#8a8f98] hover:text-red-400 opacity-0 group-hover/file:opacity-100 transition-all cursor-pointer"
+                    title="Delete File"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               ))}
             </div>
           )}
